@@ -1,0 +1,50 @@
+SELECT
+	nama,
+	ST_AsText(geom) as wgs84,
+	ST_AsText(
+	ST_Transform(geom, 32748)
+	) as utm48s
+FROM fasilitas_publik;
+
+SELECT
+	a.nama as dari,
+	b.nama as ke,
+	ST_Distance(
+		a.geom,
+		b.geom
+	) as jarak_derajat
+FROM fasilitas_publik a, fasilitas_publik b
+WHERE a.nama = 'Masjid Raya Airan'
+	AND b.nama = 'RS. Airan Raya';
+
+SELECT
+	a.nama as dari,
+	b.nama as ke,
+	ST_Distance(
+		a.geom::geography,
+		b.geom::geography
+	) as jarak_geo_m
+FROM fasilitas_publik a, fasilitas_publik b
+WHERE a.nama = 'Masjid Raya Airan'
+	AND b.nama = 'RS. Airan Raya';
+
+SELECT
+	a.nama as dari,
+	b.nama as ke,
+	ST_Distance(
+		ST_Transform(a.geom, 32748),
+		ST_Transform(b.geom, 32748)
+	) as jarak_UTM_m
+FROM fasilitas_publik a, fasilitas_publik b
+WHERE a.nama = 'Masjid Raya Airan'
+	AND b.nama = 'RS. Airan Raya';
+
+SELECT
+	nama,
+	ST_Area(
+		ST_Transform(geom, 32748)
+	) as luas_m2,
+	ST_Area(
+		ST_Transform(geom, 32748)
+	) / 10000 as luas_ha
+FROM wilayah;
