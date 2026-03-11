@@ -1,0 +1,58 @@
+SELECT ST_Distance(
+	a.geom::geography,
+	b.geom::geography
+) as jarak_meter
+FROM fasilitas_publik a, fasilitas_publik b
+WHERE a.nama = 'Masjid Raya Airan'
+AND b.nama = 'RS. Airan Raya';
+
+SELECT j.nama as jalan
+FROM jalan j, wilayah k
+WHERE k.nama = 'Kelurahan Harapan Jaya'
+AND ST_Intersects(j.geom, k.geom);
+
+SELECT f.nama, f.jenis
+FROM fasilitas_publik f
+JOIN wilayah k ON ST_Intersects(f.geom, k.geom)
+WHERE k.nama = 'Kelurahan Harapan Jaya';
+
+SELECT k.nama as kecamatan
+FROM wilayah k
+WHERE ST_Contains(
+k.geom,
+ST_GeomFromText('POINT(105.30534172181272 -5.365994573761782)', 4326)
+);
+
+SELECT k.nama, COUNT(f.id) as jumlah
+FROM wilayah k
+LEFT JOIN fasilitas_publik f
+ON ST_Contains(k.geom, f.geom)
+GROUP BY k.nama
+ORDER BY jumlah DESC;
+
+SELECT f.nama, f.jenis
+FROM fasilitas_publik f
+JOIN wilayah k ON ST_Within(f.geom, k.geom)
+WHERE k.nama = 'Kelurahan Harapan Jaya';
+
+SELECT
+	nama,
+	ROUND(ST_Distance(
+		geom::geography,
+		ST_GeomFromText('POINT(105.30751711041543 -5.365418395546613)',4326)
+			::geography
+	)::numeric) as jarak_m
+FROM fasilitas_publik
+WHERE jenis = 'Masjid'
+ORDER BY geom <->
+	ST_GeomFromText('POINT(105.30751711041543 -5.365418395546613)',4326)
+LIMIT 5;
+
+SELECT
+	k.nama,
+	COUNT(f.id) as jumlah_fasilitas
+FROM wilayah k
+LEFT JOIN fasilitas_publik f
+	ON ST_Contains(k.geom, f.geom)
+GROUP BY k.nama
+ORDER BY jumlah_fasilitas DESC;
