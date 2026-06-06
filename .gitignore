@@ -1,0 +1,18 @@
+# Mengabaikan folder lingkungan virtual Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Mengabaikan folder dependensi dan build React
+node_modules/
+dist/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Mengabaikan file sistem log
+*.log
+.DS_Store
+Thumbs.db
