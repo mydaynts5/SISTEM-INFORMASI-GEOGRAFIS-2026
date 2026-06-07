@@ -1,26 +1,28 @@
 # WebGIS Fasilitas Publik - 123140076
 
-Sistem Informasi Geografis berbasis Web (*WebGIS*) yang mengintegrasikan pengolahan database relasional spasial, server API asinkron, serta antarmuka pemetaan responsif. Sistem dibangun menggunakan teknologi **PostGIS** sebagai penyimpan data spasial, **FastAPI** sebagai penyedia layanan backend asinkron terproteksi, serta **ReactJS & Leaflet** sebagai penampil peta interaktif di sisi pengguna.
+Sistem Informasi Geografis berbasis Web (*WebGIS*) yang mengintegrasikan pengolahan database relasional spasial PostGIS, server API asinkron FastAPI, serta antarmuka pemetaan responsif ReactJS & Leaflet, serta **Pipeline Kecerdasan Buatan Spasial (Spatial AI / GeoAI)** berbasis **YOLOv8**.
 
-Sistem dilengkapi dengan sistem keamanan **JSON Web Token (JWT)** untuk mengamankan operasi pembaruan dan manipulasi data spasial (CRUD), serta fitur kueri jangkauan radius (*Nearby*) yang ter-visualisasi secara waktu-nyata di peta dasar.
+Sistem ini mendukung fungsionalitas deteksi objek otomatis pada citra penginderaan jauh (*remote sensing*) berformat GeoTIFF. Hasil koordinat piksel deteksi objek diterjemahkan secara otomatis menjadi derajat geografis global (EPSG:4326/WGS84) memanfaatkan matriks transformasi afinitas, disimpan ke PostGIS secara asinkron, dan divisualisasikan dalam bentuk layer GeoJSON pada antarmuka peta interaktif. Sistem juga dilengkapi dengan sistem keamanan **JSON Web Token (JWT)** untuk mengamankan operasi CRUD administratif.
 
 ---
 
 ## 🛠️ Tech Stack (Teknologi yang Digunakan)
 
 *   **Database:** PostgreSQL dengan Ekstensi Spasial PostGIS.
-*   **Backend:** FastAPI (Python), `asyncpg` (driver database asinkron), `pydantic` (validasi tipe data), `python-jose` (keamanan JWT), `passlib` (enkripsi kata sandi).
+*   **Backend:** FastAPI (Python), `asyncpg` (driver database asinkron), `pydantic` (validasi tipe data), `python-jose` (keamanan JWT), `passlib` (enkripsi kata sandi), `ultralytics` (YOLOv8 Engine), `opencv-python-headless` (computer vision), `rasterio` (georeferencing).
 *   **Frontend:** ReactJS, Vite, React-Leaflet, Axios, CSS (Tata letak penuh layar fleksibel).
 
 ---
 
 ## 🌟 Fitur Utama Sistem
 
-1.  **Peta Dasar Interaktif:** Peta responsif penuh layar yang terfokus pada wilayah dari database.
+1.  **Peta Dasar Interaktif:** Peta responsif yang terfokus pada wilayah dari database.
 2.  **Simbologi Dinamis:** Penanda spasial berupa lingkaran kustom berwarna-warni (`L.circleMarker`) yang ter-render otomatis sesuai dengan kategori aslinya dari database.
-3.  **Kueri Jangkauan Radius (Nearby Search):** Pencarian spasial ter-optimasi menggunakan fungsi `ST_DWithin` PostGIS. Radius pencarian dapat digambar secara dinamis berupa poligon lingkaran biru putus-putus di atas peta.
-4.  **Autentikasi Aman (JWT):** Pembatasan operasi sensitif (tambah, perbarui, hapus data) hanya untuk pengguna terautentikasi menggunakan bearer token.
-5.  **Manajemen Spasial (CRUD) di Sidebar Kiri:** Panel kontrol untuk memudahkan registrasi data baru, pengeditan langsung lewat klik penanda peta, serta penghapusan data secara waktu nyata.
+3.  **Pipeline Spasial AI (YOLOv8):** Mendeteksi objek secara otomatis (pohon, bangunan, kendaraan) dari citra drone/satelit GeoTIFF presisi tinggi.
+4.  **Georeferencing Piksel ke Koordinat Bumi:** Mengonversi posisi piksel global (x, y) hasil deteksi menjadi koordinat geografis nyata (WGS84) memanfaatkan modul transformasi afinitas Rasterio.
+5.  **Kueri Jangkauan Radius (Nearby Search):** Pencarian spasial ter-optimasi menggunakan fungsi `ST_DWithin` PostGIS.
+6.  **Autentikasi Aman (JWT):** Pembatasan operasi sensitif (tambah, perbarui, hapus data) hanya untuk pengguna administratif terautentikasi.
+7.  **Manajemen Spasial (CRUD):** Panel kontrol untuk memudahkan registrasi data baru, pengeditan langsung lewat klik penanda peta, serta penghapusan data secara waktu nyata.
 
 ---
 
@@ -28,6 +30,8 @@ Sistem dilengkapi dengan sistem keamanan **JSON Web Token (JWT)** untuk mengaman
 
 ```text
 Tugas-Praktikum-076/
+├── database.sql
+├── .gitignore
 ├── webgis-api-076/  
 │   ├── app/
 │   │   ├── __pycache__/
@@ -43,7 +47,8 @@ Tugas-Praktikum-076/
 │   │   │   └── fasilitas.py   
 │   │   └── utils/
 │   │       ├── __pycache__/
-│   │       └── auth.py  
+│   │       └── auth.py
+│   ├── detect_pipeline.py
 │   └── .env   
 │
 └── webgis-frontend-076/     
@@ -58,6 +63,8 @@ Tugas-Praktikum-076/
     │   ├── App.css  
     │   └── main.jsx 
     ├── public/
+    │   ├── marker-icon.png 
+    │   ├── marker-shadow.png 
     │   ├── favicon.svg 
     │   └── icons.svg
     ├── package.json 
@@ -97,7 +104,7 @@ Panduan operasional ini memuat langkah-langkah rincian dan runtur untuk melakuka
         geom GEOMETRY(Point, 4326)
     );
     ```
-    *(Database dapat dilihat di database.sql)*.
+    *(Kueri SQL lengkap di atas dapat dilihat di berkas `database.sql` pada root folder).*
 
 ---
 
@@ -153,7 +160,22 @@ Panduan operasional ini memuat langkah-langkah rincian dan runtur untuk melakuka
 
 ---
 
-### 3. Konfigurasi dan Menjalankan Antarmuka Frontend (React + Vite) [8]
+### 3. Eksekusi Skrip Pipeline Spasial AI (YOLOv8 + Rasterio)
+
+1.  Salin berkas citra drone/satelit GeoTIFF (misalnya: `aerial_image.tif`) ke dalam folder `webgis-api-076/`.
+2.  Buka berkas `detect_pipeline.py`, lalu sesuaikan nama berkas citra spasial Anda pada baris paling bawah:
+    ```python
+    image_file = 'aerial_image.tif' # Ganti sesuai nama berkas citra asli yang diletakkan
+    ```
+3.  Jalankan skrip kognisi spasial di terminal backend (pastikan virtual environment aktif):
+    ```bash
+    python detect_pipeline.py
+    ```
+    *Sistem otomatis memproses pemotongan ubin (tiling), mendeteksi objek via YOLOv8, menerjemahkan koordinat piksel ke geografis via Rasterio, dan menyimpan hasilnya ke database PostGIS*.
+
+---
+
+### 4. Konfigurasi dan Menjalankan Antarmuka Frontend (React + Vite) [8]
 
 1.  Buka jendela terminal baru (terpisah dari terminal backend) dan masuk ke direktori proyek frontend:
     ```bash
@@ -168,3 +190,19 @@ Panduan operasional ini memuat langkah-langkah rincian dan runtur untuk melakuka
     npm run dev
     ```
     *Aplikasi pemetaan interaktif WebGIS siap diakses menggunakan browser web di alamat `http://localhost:5173`*.
+
+---
+
+## 📸 Dokumentasi Sistem
+
+Berikut lampiran gambar dokumentasi sistem di bawah ini untuk menunjukkan status berjalan proyek:
+
+### 1. Terminal Uvicorn & Database Connected
+*![Database Connected](image.png)*
+
+### 2. Dasbor Pengujian Swagger UI (`/docs`)
+*![Swagger UI](image-1.png)*
+
+### 3. Tampilan Utuh WebGIS Spasial AI (Peta Penuh Layar)
+*![Webgis (Fasilitas Publik)](image-2.png)*
+*![Webgis (YOLOv8))](image-3.png)*

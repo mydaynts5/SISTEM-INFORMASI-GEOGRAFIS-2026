@@ -26,8 +26,6 @@ function MapView() {
   // State untuk filter kategori dan daftar fasilitas (GET All)
   const [filterJenis, setFilterJenis] = useState('Semua');
   const [daftarFasilitas, setDaftarFasilitas] = useState([]);
-  
-  // Menampung string pencarian nama fasilitas publik
   const [searchQuery, setSearchQuery] = useState('');
 
   // State untuk detail fasilitas terpilih (GET by ID)
@@ -39,17 +37,25 @@ function MapView() {
   const [isSearchingNearby, setIsSearchingNearby] = useState(false);
   const [nearbyCenter, setNearbyCenter] = useState(null);
 
-  // Referensi ke instansi peta Leaflet untuk kebutuhan navigasi kamera
+  // STATE BARU UNTUK MENAMPUNG HASIL DETEKSI AI (YOLOv8)
+  const [detectionData, setDetectionData] = useState(null);
+
+  // Referensi ke instansi peta Leaflet untuk kebutuhan navigasi kamera (flyTo)
   const mapRef = useRef(null);
 
   const fetchAllData = async () => {
     try {
-      const resGeo = await api.get('/api/fasilitas/geojson');
+      const resGeo = await api.get('/api/fasilitas/geojson'); // Ambil GeoJSON Fasilitas
       setData(resGeo.data);
 
-      const resAll = await api.get('/api/fasilitas/');
+      const resAll = await api.get('/api/fasilitas/'); // Ambil data atribut fasilitas (GET All)
       setOriginalData(resAll.data);
       setDaftarFasilitas(resAll.data);
+
+      // MENARIK DATA GEJSON DETEKSI SPASIAL AI SECARA ASINKRON
+      const resDetect = await api.get('/api/detections/geojson');
+      setDetectionData(resDetect.data);
+
     } catch (err) {
       console.error("Gagal memuat data spasial:", err);
     }
@@ -59,16 +65,13 @@ function MapView() {
     fetchAllData();
   }, []);
 
-  // Menggabungkan Filter Kategori DAN Pencarian Nama
   useEffect(() => {
     let filtered = originalData;
 
-    // 1. Filter Kategori [20]
     if (filterJenis !== 'Semua') {
       filtered = filtered.filter(f => f.jenis === filterJenis);
     }
 
-    // Filter Pencarian Nama
     if (searchQuery.trim() !== '') {
       filtered = filtered.filter(f => 
         f.nama.toLowerCase().includes(searchQuery.toLowerCase())
@@ -78,7 +81,7 @@ function MapView() {
     setDaftarFasilitas(filtered);
   }, [filterJenis, searchQuery, originalData]);
 
-  // Palet Warna Map & Legenda
+  // Penentu warna titik berdasarkan kategori data
   const colors = { 
     'Rumah Sakit': '#e74c3c',
     'Sekolah': '#3498db',
@@ -106,13 +109,12 @@ function MapView() {
   const onEachFeature = (feature, layer) => {
     const { nama, jenis, alamat } = feature.properties;
     
-    // Penutupan autoPan dinonaktifkan untuk mencegah peta bergetar
     layer.bindPopup(`
       <div style="font-family: Arial; padding: 5px; min-width: 150px;">
         <h3 style="margin: 0 0 5px 0; color: #2c3e50; border-bottom: 1px solid #ddd; padding-bottom: 4px;">${nama}</h3>
         <p style="margin: 4px 0; font-size: 11px;"><b>Kategori:</b> ${jenis}</p>
         <p style="margin: 4px 0; font-size: 11px;"><b>Alamat:</b> ${alamat || '-'}</p>
-        ${user ? `<button id="btn-edit-${feature.properties.id}" style="margin-top: 8px; width: 100%; padding: 5px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">Edit Fasilitas</button>` : ''}
+        ${user ? `<button id="btn-edit-${feature.properties.id}" style="margin-top: 8px; width: 100%; padding: 6px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">Edit Fasilitas</button>` : ''}
       </div>
     `, { autoPan: false });
 
@@ -250,7 +252,7 @@ function MapView() {
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', fontFamily: 'Arial, sans-serif' }}>
       
-      {/* DASHBOARD CONTROL CENTER SIDEBAR */}
+      {/* DASHBOARD CONTROL CENTER */}
       <div style={{ width: '300px', padding: '15px', background: '#eceff1', borderRight: '2px solid #cfd8dc', display: 'flex', flexDirection: 'column', gap: '15px', overflowY: 'auto' }}>
         <div style={{ borderBottom: '2px solid #b0bec5', paddingBottom: '10px' }}>
           <h2 style={{ margin: 0, fontSize: '16px', color: '#2c3e50' }}>Dashboard SIG</h2>
@@ -336,7 +338,7 @@ function MapView() {
               </div>
             )}
 
-            {/* DAFTAR SEMUA FASILITAS DENGAN FITUR PENCARIAN NAMA */}
+            {/* DAFTAR SEMUA FASILITAS DENGAN FITUR PENCARIAN NAMA INTEGRATIF */}
             <div style={{ background: '#fff', padding: '12px', borderRadius: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
                 <h3 style={{ margin: 0, fontSize: '12px', color: '#2c3e50' }}>📋 Daftar Semua Fasilitas</h3>
@@ -349,7 +351,6 @@ function MapView() {
                 </select>
               </div>
               
-              {/* PENCARIAN NAMA FASILITAS */}
               <div style={{ position: 'relative' }}>
                 <input 
                   type="text" 
@@ -399,7 +400,31 @@ function MapView() {
             />
           )}
 
-          {/* AREA RADIUS KUERI SPASIAL (NEARBY) */}
+          {/* VISUALISASI HASIL DETEKSI OBJEK SPASIAL AI (YOLOv8) */}
+          {detectionData && (
+            <GeoJSON 
+              data={detectionData} 
+              pointToLayer={(feature, latlng) => L.circleMarker(latlng, {
+                radius: 7,
+                fillColor: '#9b59b6',
+                color: '#ffffff',
+                weight: 1.5,
+                fillOpacity: 0.95
+              })}
+              onEachFeature={(feature, layer) => {
+                const { class_name, confidence } = feature.properties;
+                layer.bindPopup(`
+                  <div style="font-family: Arial; padding: 5px; min-width: 150px;">
+                    <h3 style="margin: 0 0 5px 0; color: #8e44ad; border-bottom: 1px solid #ddd; padding-bottom: 4px;">Deteksi Spasial AI</h3>
+                    <p style="margin: 4px 0; font-size: 11px;"><b>Objek:</b> ${class_name}</p>
+                    <p style="margin: 4px 0; font-size: 11px;"><b>Confidence:</b> ${(confidence * 100).toFixed(2)}%</p>
+                  </div>
+                `, { autoPan: false });
+              }}
+            />
+          )}
+
+          {/* VISUALISASI AREA RADIUS KUERI SPASIAL (NEARBY) */}
           {nearbyCenter && (
             <Circle 
               center={[nearbyCenter.lat, nearbyCenter.lng]}
@@ -415,7 +440,7 @@ function MapView() {
           )}
         </MapContainer>
 
-        {/* KOMPAS*/}
+        {/* INSTRUMEN KOMPAS*/}
         <div style={{
           position: 'absolute',
           top: '80px',
@@ -442,7 +467,7 @@ function MapView() {
           </svg>
         </div>
 
-        {/* LEGENDA FASILITAS PUBLIK */}
+        {/* LEGENDA SPASIAL*/}
         <div style={{
           position: 'absolute',
           bottom: '20px',
@@ -458,7 +483,7 @@ function MapView() {
           lineHeight: '1.8',
           borderRight: '4px solid #2980b9'
         }}>
-          <h4 style={{ margin: '0 0 8px 0', borderBottom: '1px solid #ddd', paddingBottom: '4px', fontSize: '12px', fontWeight: 'bold' }}>Legend Fasilitas Publik</h4>
+          <h4 style={{ margin: '0 0 8px 0', borderBottom: '1px solid #ddd', paddingBottom: '4px', fontSize: '12px', fontWeight: 'bold' }}>Legenda Fasilitas</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {Object.keys(colors).map(key => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

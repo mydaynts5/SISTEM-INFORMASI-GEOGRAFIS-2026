@@ -244,3 +244,12 @@ SELECT indexname, tablename
 FROM pg_indexes
 WHERE schemaname = 'public' 
   AND tablename IN ('fasilitas_publik', 'jalan', 'wilayah');
+
+-- Membuat tabel penyimpanan hasil ekstraksi deteksi objek spasial
+CREATE TABLE IF NOT EXISTS detections (
+    id SERIAL PRIMARY KEY,
+    class_name VARCHAR(50) NOT NULL,
+    confidence FLOAT NOT NULL,
+    geom GEOMETRY(Point, 4326) NOT NULL,
+    detected_at TIMESTAMP DEFAULT NOW()
+);
